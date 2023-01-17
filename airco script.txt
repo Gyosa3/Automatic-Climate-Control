@@ -1,0 +1,147 @@
+alias: "Airco - Action an AC with params "
+variables:
+  ac_name: none
+  ac_mode: "off"
+  ac_temp: 20
+  ac_suffix: none
+  ac_pwsave: "off"
+sequence:
+  - if:
+      - condition: template
+        value_template: "{{ (ac_name != 'none') and (states(ac_name) != ac_mode) }}"
+    then:
+      - service: climate.set_hvac_mode
+        data:
+          hvac_mode: "{{ ac_mode }}"
+        target:
+          entity_id: "{{ ac_name }}"
+      - service: input_boolean.turn_on
+        data: {}
+        target:
+          entity_id: input_boolean.allow_airco_start_stop
+  - if:
+      - condition: template
+        value_template: >-
+          {{ (ac_name != 'none') and (ac_suffix != 'none') and (ac_mode !=
+          'off') }}
+    then:
+      - if:
+          - condition: template
+            value_template: >-
+              {{ state_attr(ac_name, 'temperature') | float(0) != ac_temp |
+              float(0) }}
+        then:
+          - service: climate.set_temperature
+            data:
+              temperature: "{{ ac_temp }}"
+            target:
+              entity_id: "{{ ac_name }}"
+      - if:
+          - condition: template
+            value_template: |
+              {{ is_state('input_boolean.home_occupation','on') and
+                 ((now().hour >= 21) or (now().hour < 9)) }}
+        then:
+          - if:
+              - condition: template
+                value_template: |
+                  {{ state_attr(ac_name, 'fan_mode') != 'Low' }}
+            then:
+              - service: climate.set_fan_mode
+                data:
+                  fan_mode: Low
+                target:
+                  entity_id: "{{ ac_name }}"
+          - if:
+              - condition: template
+                value_template: "{{ is_state('input_boolean.ac_sleep_'+ac_suffix,'off') }}"
+            then:
+              - service: input_boolean.turn_on
+                data: {}
+                target:
+                  entity_id: "{{ 'input_boolean.ac_sleep_' + ac_suffix }}"
+          - if:
+              - condition: template
+                value_template: >-
+                  {{ state_attr(ac_name, 'swing_mode') != 'Fixed in the upmost
+                  position' }}
+            then:
+              - service: climate.set_swing_mode
+                data:
+                  swing_mode: Fixed in the upmost position
+                target:
+                  entity_id: "{{ ac_name }}"
+        else:
+          - if:
+              - condition: template
+                value_template: |
+                  {{ (ac_mode != 'dry') and
+                     (ac_pwsave != 'on') and
+                     (state_attr(ac_name, 'fan_mode') != 'Auto') }}
+            then:
+              - service: climate.set_fan_mode
+                data:
+                  fan_mode: Auto
+                target:
+                  entity_id: "{{ ac_name }}"
+          - if:
+              - condition: template
+                value_template: "{{ is_state('input_boolean.ac_sleep_'+ac_suffix,'on') }}"
+            then:
+              - service: input_boolean.turn_off
+                data: {}
+                target:
+                  entity_id: "{{ 'input_boolean.ac_sleep_' + ac_suffix }}"
+          - if:
+              - condition: template
+                value_template: >-
+                  {{ state_attr(ac_name, 'swing_mode') != 'Swing in full range'
+                  }}
+            then:
+              - service: climate.set_swing_mode
+                data:
+                  swing_mode: Swing in full range
+                target:
+                  entity_id: "{{ ac_name }}"
+      - if:
+          - condition: template
+            value_template: >
+              {{ is_state('input_boolean.home_occupation','off') and
+              is_state('input_boolean.ac_health_'+ac_suffix,'on')}}
+        then:
+          - service: input_boolean.turn_off
+            data: {}
+            target:
+              entity_id: "{{ 'input_boolean.ac_health_' + ac_suffix }}"
+      - if:
+          - condition: template
+            value_template: >
+              {{ is_state('input_boolean.home_occupation','on') and
+              is_state('input_boolean.ac_health_'+ac_suffix,'off')}}
+        then:
+          - service: input_boolean.turn_on
+            data: {}
+            target:
+              entity_id: "{{ 'input_boolean.ac_health_' + ac_suffix }}"
+      - if:
+          - condition: template
+            value_template: >
+              {{ (states(ac_name) in ['cool', 'dry']) and
+              is_state('input_boolean.ac_xfan_'+ac_suffix,'off')}}
+        then:
+          - service: input_boolean.turn_on
+            data: {}
+            target:
+              entity_id: "{{ 'input_boolean.ac_xfan_' + ac_suffix }}"
+      - if:
+          - condition: template
+            value_template: >-
+              {{ not (is_state('input_boolean.ac_powersave_' + ac_suffix,
+              ac_pwsave)) }}
+        then:
+          - service: input_boolean.toggle
+            data: {}
+            target:
+              entity_id: "{{ 'input_boolean.ac_powersave_' + ac_suffix }}"
+mode: parallel
+max: 10
